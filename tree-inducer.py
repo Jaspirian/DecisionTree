@@ -444,7 +444,7 @@ reps = []
 for line in lines:
 	reps.append(line_to_representative(line))
 
-tree = create_tree(reps, INTERVAL)
+tree = create_tree(reps, TESTING_INTERVAL)
 print(tree.to_string()[:-1])
 print("Performing leave-one-out cross validation...")
 print(leave_one_out_cross_validation(reps),"% correct.")
