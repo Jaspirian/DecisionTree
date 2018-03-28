@@ -127,6 +127,7 @@ def get_best_issue(reps, ignored=[]):
 	best_issue = (None, -float("inf"))
 	num_issues = len(reps[0].votes)
 	for issue in range(num_issues):
+
 		# Skip the issues already split on.
 		if issue in ignored:
 			continue
@@ -137,11 +138,9 @@ def get_best_issue(reps, ignored=[]):
 
 		positions = split_around_positions(reps, issue)
 
-		for position,voters in positions.items():
-			if voters:
-				gain = information_gain(reps, voters)
-				if gain > best_issue[1]:
-					best_issue = (issue, gain)
+		gain = information_gain(positions, reps)
+		if gain > best_issue[1]:
+			best_issue = (issue, gain)
 
 	return best_issue[0]
 
@@ -167,11 +166,15 @@ def entropy(reps):
 	We use the formula entropy(S) = -p(A)log(p(A)) - p(B)log(p(B)).
 	We use log base 2 in order to measure information in bits.
 	"""
-	affiliations = {"D":0, "R":0}
-	for rep in reps:
-		affiliations[rep.party] += 1
-	probD = affiliations["D"] / len(reps)
-	probR = affiliations["R"] / len(reps)
+	parties = split_around_parties(reps)
+	whole = 0
+	for voters in parties.values():
+		whole += len(voters)
+	if whole == 0:
+		return 0
+
+	probD = len(parties["D"]) / whole
+	probR = len(parties["R"]) / whole
 	# We accept 0 * log(0) as 0, not undefined.
 	# To prevent domain issues, we set probabilities to 1 if they are 0. 
 	if probD == 0:
@@ -183,16 +186,24 @@ def entropy(reps):
 
 	return entropy
 
-def information_gain(reps, previous_reps):
+def information_gain(positions, previous_reps):
 	"""
 	Calculates the infomation gain of a new split.
 	We use the formula gain(S) = entropy(S) - (Sum(Si/S) * entropy(Si))
 	"""
-	new_proportion = len(reps) / (len(previous_reps) + len(previous_reps))
-	old_proportion = 1 - new_proportion 
-	gain = entropy(previous_reps) - ((new_proportion * entropy(reps)) + (old_proportion * entropy(previous_reps)))
+	proportions = {"+":0, "-":0, ".":0}
+	
+	whole = 0
+	for voters in positions.values():
+		whole += len(voters)
+
+	for position,voters in positions.items():
+		proportions[position] = len(voters) / whole
+
+	gain = entropy(previous_reps) - ((proportions["+"] * entropy(positions["+"])) + (proportions["-"] * entropy(positions["-"])) + (proportions["."] * entropy(positions["."])))
 
 	return gain
+
 
 def get_matches(base, reps):
 	"""
@@ -202,7 +213,6 @@ def get_matches(base, reps):
 	matches = {True:[], False:[]}
 
 	for rep in reps:
-		# print(rep.party,rep.votes)
 		matches[rep.test_on_node(base)].append(rep)
 
 	return matches
@@ -372,7 +382,6 @@ def prune_tree(base, tuning_set):
 	and removes the node. Then recurses. If no such node is found, exits.
 	"""
 	nodes = get_all_nodes(base, [])
-	# print(nodes)
 
 	BLANK_DICT = {"+":None, "-":None, ".":None}
 
@@ -439,6 +448,7 @@ def leave_one_out_cross_validation(reps):
 TESTING_INTERVAL = 4
 
 file = sys.argv[1]
+# file = "voting-data.tsv"
 lines = read_file(file)
 reps = []
 for line in lines:
